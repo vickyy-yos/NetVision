@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetVision Login</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+<div class="login-container">
+
+    <div class="logo">
+        <i class="ti ti-broadcast"></i>
+    </div>
+
+    <h1>NetVision</h1>
+
+    <p class="subtitle">
+        Network monitoring system
+    </p>
+
+    <input
+        type="text"
+        id="username"
+        placeholder="Username">
+
+    <input
+        type="password"
+        id="password"
+        placeholder="Password">
+
+    <button onclick="login()">
+        Sign in
+    </button>
+
+    <small>
+        Secure network dashboard
+    </small>
+
+</div>
+
+<script>
+
+async function login(){
+
+    const username =
+    document.getElementById("username").value;
+
+    const password =
+    document.getElementById("password").value;
+
+    if(!username || !password){
+        alert("Username dan password wajib diisi");
+        return;
+    }
+
+    try{
+
+        const response = await fetch("http://localhost:3000/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if(response.ok){
+
+            localStorage.setItem("loggedIn", "true");
+            localStorage.setItem("token", data.token);
+            localStorage.setItem("username", data.username);
+
+            window.location.href = "dashboard.html";
+
+        }else{
+
+            alert(data.message || "Username atau password salah");
+
+        }
+
+    }catch(err){
+
+        console.error(err);
+        alert("Tidak bisa terhubung ke server. Pastikan backend sedang berjalan.");
+
+    }
+}
+
+</script>
+
+</body>
+</html>

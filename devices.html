@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetVision — Devices</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>
+if(localStorage.getItem("loggedIn") !== "true"){
+    window.location.href = "index.html";
+}
+</script>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="ti ti-broadcast"></i>
+        <h2>NetVision</h2>
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+            <i class="ti ti-layout-sidebar-left-collapse" id="toggleIcon"></i>
+        </button>
+    </div>
+    <ul>
+        <li onclick="window.location.href='dashboard.html'"><i class="ti ti-chart-bar"></i><span> Dashboard</span></li>
+        <li class="active"><i class="ti ti-server-2"></i><span> Devices</span></li>
+        <li onclick="window.location.href='traffic.html'"><i class="ti ti-activity"></i><span> Traffic</span></li>
+        <li onclick="window.location.href='alerts.html'"><i class="ti ti-bell"></i><span> Alerts</span></li>
+        <li onclick="window.location.href='topology.html'"><i class="ti ti-topology-star"></i><span> Topology</span></li>
+        <li class="logout" onclick="logout()"><i class="ti ti-logout"></i><span> Logout</span></li>
+    </ul>
+    <div class="system-status">
+        <span class="status-dot"></span> System operational
+    </div>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        <h2>Devices</h2>
+        <div class="user-info">
+            <span id="clock"></span>
+            <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme" style="font-size:18px"><i class="ti ti-sun" id="themeIcon"></i></button>
+            <div class="user-chip" onclick="window.location.href='profile.html'">
+                <span class="avatar">V</span>
+                Vicky
+            </div>
+        </div>
+    </div>
+
+    <h1>Device management</h1>
+
+    <div class="cards">
+        <div class="card">
+            <div class="card-icon total"><i class="ti ti-router"></i></div>
+            <p class="card-label">Total devices</p>
+            <p class="card-value" id="totalDevice"></p>
+        </div>
+        <div class="card">
+            <div class="card-icon online"><i class="ti ti-circle-check"></i></div>
+            <p class="card-label">Online</p>
+            <p class="card-value online" id="onlineDevice"></p>
+        </div>
+        <div class="card">
+            <div class="card-icon offline"><i class="ti ti-circle-x"></i></div>
+            <p class="card-label">Offline</p>
+            <p class="card-value offline" id="offlineDevice"></p>
+        </div>
+        <div class="card">
+            <div class="card-icon ping"><i class="ti ti-gauge"></i></div>
+            <p class="card-label">Avg ping</p>
+            <p class="card-value" id="avgPing"></p>
+        </div>
+    </div>
+
+    <div class="search-box" style="margin-top:20px">
+        <i class="ti ti-search"></i>
+        <input type="text" id="searchInput" placeholder="Search device...">
+    </div>
+
+    <div class="section-header">
+        <h2><i class="ti ti-list-details"></i> All devices</h2>
+        <div style="display:flex;gap:10px">
+            <button class="btn-secondary" onclick="exportCSV()"><i class="ti ti-download"></i> Export CSV</button>
+            <button class="btn-primary" onclick="openAddModal()"><i class="ti ti-plus"></i> Add device</button>
+        </div>
+    </div>
+
+    <table id="deviceTable">
+        <thead>
+            <tr>
+                <th>Device name</th>
+                <th>IP address</th>
+                <th>Status</th>
+                <th>Added</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+</div>
+
+<div class="modal-overlay" id="deviceModal">
+    <div class="modal-box">
+        <h2 id="modalTitle">Add device</h2>
+        <input type="hidden" id="deviceId">
+        <label>Device name</label>
+        <input type="text" id="deviceName" placeholder="e.g. Switch Lantai 2">
+        <label>IP address</label>
+        <input type="text" id="deviceIp" placeholder="e.g. 192.168.1.50">
+        <label>Status</label>
+        <select id="deviceStatus">
+            <option value="Online">Online</option>
+            <option value="Offline">Offline</option>
+        </select>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn-primary" onclick="saveDevice()">Save</button>
+        </div>
+    </div>
+</div>
+
+<script src="app-devices.js"></script>
+<script>
+function toggleSidebar(){
+    const sidebar = document.querySelector('.sidebar');
+    const icon = document.getElementById('toggleIcon');
+    sidebar.classList.toggle('collapsed');
+    icon.className = sidebar.classList.contains('collapsed')
+        ? 'ti ti-layout-sidebar-left-expand'
+        : 'ti ti-layout-sidebar-left-collapse';
+}
+</script>
+<script>
+function toggleTheme(){
+    const isLight = document.body.classList.toggle("light");
+    localStorage.setItem("theme", isLight ? "light" : "dark");
+    document.getElementById("themeIcon").className = isLight ? "ti ti-moon" : "ti ti-sun";
+}
+const savedTheme = localStorage.getItem("theme");
+if(savedTheme === "light"){
+    document.body.classList.add("light");
+    document.getElementById("themeIcon").className = "ti ti-moon";
+}
+</script>
+</body>
+</html>

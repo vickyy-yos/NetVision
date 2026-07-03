@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetVision — Topology</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #topoCanvas {
+            width: 100%;
+            height: calc(100vh - 180px);
+            min-height: 500px;
+            display: block;
+            cursor: grab;
+        }
+        #topoCanvas:active { cursor: grabbing; }
+        .topo-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            position: relative;
+        }
+        .topo-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-surface);
+        }
+        .topo-legend {
+            display: flex;
+            gap: 16px;
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--text-secondary);
+            align-items: center;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+        }
+        .topo-tooltip {
+            position: absolute;
+            background: var(--bg-modal);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            font-size: 12px;
+            color: var(--text-primary);
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            min-width: 140px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.3);
+        }
+    </style>
+</head>
+<body>
+
+<script>
+if(localStorage.getItem("loggedIn") !== "true"){
+    window.location.href = "index.html";
+}
+</script>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="ti ti-broadcast"></i>
+        <h2>NetVision</h2>
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+            <i class="ti ti-layout-sidebar-left-collapse" id="toggleIcon"></i>
+        </button>
+    </div>
+    <ul>
+        <li onclick="window.location.href='dashboard.html'"><i class="ti ti-chart-bar"></i><span> Dashboard</span></li>
+        <li onclick="window.location.href='devices.html'"><i class="ti ti-server-2"></i><span> Devices</span></li>
+        <li onclick="window.location.href='traffic.html'"><i class="ti ti-activity"></i><span> Traffic</span></li>
+        <li onclick="window.location.href='alerts.html'"><i class="ti ti-bell"></i><span> Alerts</span></li>
+        <li class="active"><i class="ti ti-topology-star"></i><span> Topology</span></li>
+        <li class="logout" onclick="logout()"><i class="ti ti-logout"></i><span> Logout</span></li>
+    </ul>
+    <div class="system-status">
+        <span class="status-dot"></span> System operational
+    </div>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        <h2>Topology</h2>
+        <div class="user-info">
+            <span id="clock"></span>
+            <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme" style="font-size:18px">
+                <i class="ti ti-sun" id="themeIcon"></i>
+            </button>
+            <div class="user-chip" onclick="window.location.href='profile.html'">
+                <span class="avatar">V</span>
+                Vicky
+            </div>
+        </div>
+    </div>
+
+    <h1>Network topology</h1>
+
+    <div class="topo-wrap">
+        <div class="topo-toolbar">
+            <button class="btn-secondary" onclick="resetView()"><i class="ti ti-focus-centered"></i> Reset view</button>
+            <button class="btn-secondary" onclick="autoLayout()"><i class="ti ti-layout-distribute-horizontal"></i> Auto layout</button>
+            <button class="btn-secondary" onclick="loadTopology()"><i class="ti ti-refresh"></i> Refresh</button>
+            <div class="topo-legend">
+                <span><span class="legend-dot" style="background:#22c55e"></span>Online</span>
+                <span><span class="legend-dot" style="background:#ef4444"></span>Offline</span>
+                <span><span class="legend-dot" style="background:#3b82f6"></span>Router/Core</span>
+            </div>
+        </div>
+        <canvas id="topoCanvas"></canvas>
+        <div class="topo-tooltip" id="topoTooltip"></div>
+    </div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:3000/api";
+function getToken(){ return localStorage.getItem("token"); }
+function authHeaders(){ return { "Content-Type":"application/json","Authorization":"Bearer "+getToken() }; }
+function logout(){ localStorage.removeItem("loggedIn"); localStorage.removeItem("token"); window.location.href="index.html"; }
+function toggleSidebar(){
+    const s=document.querySelector('.sidebar'), i=document.getElementById('toggleIcon');
+    s.classList.toggle('collapsed');
+    i.className=s.classList.contains('collapsed')?'ti ti-layout-sidebar-left-expand':'ti ti-layout-sidebar-left-collapse';
+}
+function toggleTheme(){
+    const isLight=document.body.classList.toggle("light");
+    localStorage.setItem("theme",isLight?"light":"dark");
+    document.getElementById("themeIcon").className=isLight?"ti ti-moon":"ti ti-sun";
+    drawTopology();
+}
+const savedTheme=localStorage.getItem("theme");
+if(savedTheme==="light"){ document.body.classList.add("light"); document.getElementById("themeIcon").className="ti ti-moon"; }
+function updateClock(){ document.getElementById("clock").innerText=new Date().toLocaleTimeString(); }
+setInterval(updateClock,1000); updateClock();
+
+// ===== TOPOLOGY ENGINE =====
+const canvas = document.getElementById("topoCanvas");
+const ctx = canvas.getContext("2d");
+const tooltip = document.getElementById("topoTooltip");
+
+let nodes = [];
+let edges = [];
+let dragging = null;
+let offsetX = 0, offsetY = 0;
+let scale = 1;
+let panX = 0, panY = 0;
+let isPanning = false;
+let lastMouse = null;
+let animFrame = 0;
+
+function resizeCanvas(){
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    drawTopology();
+}
+
+function getNodeIcon(name){
+    const n = name.toLowerCase();
+    if(n.includes("router")) return "R";
+    if(n.includes("switch")) return "SW";
+    if(n.includes("server")) return "SV";
+    if(n.includes("ap") || n.includes("wifi") || n.includes("access")) return "AP";
+    if(n.includes("firewall")) return "FW";
+    return "PC";
+}
+
+function getNodeColor(node, isLight){
+    if(node.status === "Offline") return { fill:"#ef4444", stroke:"#dc2626", text:"#fff" };
+    const n = node.name.toLowerCase();
+    if(n.includes("router")) return { fill:"#3b82f6", stroke:"#2563eb", text:"#fff" };
+    if(n.includes("switch")) return { fill:"#8b5cf6", stroke:"#7c3aed", text:"#fff" };
+    if(n.includes("server")) return { fill:"#f59e0b", stroke:"#d97706", text:"#fff" };
+    return { fill:"#22c55e", stroke:"#16a34a", text:"#fff" };
+}
+
+function buildEdges(nodes){
+    const edges = [];
+    const router = nodes.find(n => n.name.toLowerCase().includes("router"));
+    const sw = nodes.find(n => n.name.toLowerCase().includes("switch"));
+
+    nodes.forEach(node => {
+        if(node === router) return;
+        if(sw && node !== sw){
+            // Most devices connect to switch
+            if(!node.name.toLowerCase().includes("router")){
+                edges.push({ from: sw.id, to: node.id });
+            }
+        }
+        // Switch and unconnected devices connect to router
+        if(router && (node === sw || (!sw && node !== router))){
+            edges.push({ from: router.id, to: node.id });
+        }
+    });
+
+    // If no router/switch, connect all to first node
+    if(!router && !sw && nodes.length > 1){
+        nodes.slice(1).forEach(node => {
+            edges.push({ from: nodes[0].id, to: node.id });
+        });
+    }
+
+    return edges;
+}
+
+function autoLayout(){
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const router = nodes.find(n => n.name.toLowerCase().includes("router"));
+    const sw = nodes.find(n => n.name.toLowerCase().includes("switch"));
+
+    if(router){ router.x = cx; router.y = cy - 120; }
+    if(sw){ sw.x = cx; sw.y = cy; }
+
+    const others = nodes.filter(n => n !== router && n !== sw);
+    const r = Math.min(canvas.width, canvas.height) * 0.35;
+    others.forEach((node, i) => {
+        const angle = (i / others.length) * Math.PI * 2 - Math.PI / 2;
+        node.x = cx + Math.cos(angle) * r;
+        node.y = cy + (sw ? 80 : 0) + Math.sin(angle) * r * 0.7;
+    });
+
+    panX = 0; panY = 0; scale = 1;
+    drawTopology();
+}
+
+function resetView(){ panX = 0; panY = 0; scale = 1; drawTopology(); }
+
+function drawTopology(){
+    if(!canvas.width) return;
+    const isLight = document.body.classList.contains("light");
+    const bg = isLight ? "#f8fafc" : "#0d1526";
+    const edgeColor = isLight ? "rgba(100,120,150,0.3)" : "rgba(59,130,246,0.25)";
+    const edgeOnline = isLight ? "rgba(34,197,94,0.5)" : "rgba(34,197,94,0.4)";
+    const textColor = isLight ? "#0f172a" : "#e8edf5";
+    const subColor = isLight ? "#64748b" : "#7a90b0";
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grid dots
+    ctx.fillStyle = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.03)";
+    for(let x = 0; x < canvas.width; x += 30){
+        for(let y = 0; y < canvas.height; y += 30){
+            ctx.beginPath();
+            ctx.arc(x + (panX % 30), y + (panY % 30), 1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(scale, scale);
+
+    // Draw edges
+    edges.forEach(edge => {
+        const from = nodes.find(n => n.id === edge.from);
+        const to = nodes.find(n => n.id === edge.to);
+        if(!from || !to) return;
+
+        const bothOnline = from.status === "Online" && to.status === "Online";
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.strokeStyle = bothOnline ? edgeOnline : edgeColor;
+        ctx.lineWidth = bothOnline ? 1.5 : 1;
+        ctx.setLineDash(bothOnline ? [] : [5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Animated packet dot
+        if(bothOnline){
+            const t = (Date.now() % 2000) / 2000;
+            const px = from.x + (to.x - from.x) * t;
+            const py = from.y + (to.y - from.y) * t;
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(34,197,94,0.8)";
+            ctx.fill();
+        }
+    });
+
+    // Draw nodes
+    const R = 32;
+    nodes.forEach(node => {
+        const colors = getNodeColor(node, isLight);
+        const icon = getNodeIcon(node.name);
+
+        // Glow
+        if(node.status === "Online"){
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, R + 8, 0, Math.PI * 2);
+            ctx.fillStyle = colors.fill + "18";
+            ctx.fill();
+        }
+
+        // Shadow
+        ctx.shadowColor = colors.fill + "44";
+        ctx.shadowBlur = 12;
+
+        // Circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, R, 0, Math.PI * 2);
+        ctx.fillStyle = colors.fill;
+        ctx.fill();
+        ctx.strokeStyle = colors.stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+
+        // Icon text
+        ctx.fillStyle = colors.text;
+        ctx.font = `bold ${icon.length > 2 ? 10 : 13}px 'Inter', Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(icon, node.x, node.y);
+
+        // Status dot
+        ctx.beginPath();
+        ctx.arc(node.x + R * 0.7, node.y - R * 0.7, 6, 0, Math.PI * 2);
+        ctx.fillStyle = node.status === "Online" ? "#22c55e" : "#ef4444";
+        ctx.fill();
+        ctx.strokeStyle = bg;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = textColor;
+        ctx.font = "bold 12px 'Inter', Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(node.name, node.x, node.y + R + 8);
+
+        ctx.fillStyle = subColor;
+        ctx.font = "10px 'Inter', Arial";
+        ctx.fillText(node.ip_address, node.x, node.y + R + 24);
+    });
+
+    ctx.restore();
+    animFrame = requestAnimationFrame(drawTopology);
+}
+
+// Mouse events
+canvas.addEventListener("mousedown", e => {
+    const pos = getMousePos(e);
+    const node = getNodeAt(pos.x, pos.y);
+    if(node){ dragging = node; offsetX = pos.x - node.x; offsetY = pos.y - node.y; canvas.style.cursor = "grabbing"; }
+    else { isPanning = true; lastMouse = pos; canvas.style.cursor = "grabbing"; }
+});
+
+canvas.addEventListener("mousemove", e => {
+    const pos = getMousePos(e);
+    if(dragging){ dragging.x = pos.x - offsetX; dragging.y = pos.y - offsetY; return; }
+    if(isPanning && lastMouse){ panX += pos.x - lastMouse.x; panY += pos.y - lastMouse.y; lastMouse = pos; return; }
+
+    // Tooltip
+    const node = getNodeAt(pos.x, pos.y);
+    if(node){
+        tooltip.style.display = "block";
+        tooltip.style.left = (e.offsetX + 16) + "px";
+        tooltip.style.top = (e.offsetY - 10) + "px";
+        tooltip.innerHTML = `
+            <div style="font-weight:700;margin-bottom:4px">${node.name}</div>
+            <div style="color:var(--text-muted)">IP: ${node.ip_address}</div>
+            <div style="color:${node.status==="Online"?"var(--green)":"var(--red)"};font-weight:600;margin-top:4px">● ${node.status}</div>
+        `;
+        canvas.style.cursor = "pointer";
+    } else {
+        tooltip.style.display = "none";
+        canvas.style.cursor = "grab";
+    }
+});
+
+canvas.addEventListener("mouseup", () => { dragging = null; isPanning = false; lastMouse = null; canvas.style.cursor = "grab"; });
+canvas.addEventListener("mouseleave", () => { dragging = null; isPanning = false; tooltip.style.display = "none"; });
+canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    scale = Math.min(Math.max(scale * delta, 0.3), 3);
+}, { passive: false });
+
+function getMousePos(e){
+    const rect = canvas.getBoundingClientRect();
+    return { x: (e.clientX - rect.left - panX) / scale, y: (e.clientY - rect.top - panY) / scale };
+}
+
+function getNodeAt(x, y){
+    return nodes.find(n => Math.hypot(n.x - x, n.y - y) < 36);
+}
+
+async function loadTopology(){
+    try{
+        const r = await fetch(`${API_BASE}/devices`, { headers: authHeaders() });
+        if(r.status === 401 || r.status === 403){ logout(); return; }
+        const devices = await r.json();
+
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+
+        // Keep existing positions if node already exists
+        nodes = devices.map((d, i) => {
+            const existing = nodes.find(n => n.id === d.id);
+            return {
+                ...d,
+                x: existing ? existing.x : cx + Math.cos(i / devices.length * Math.PI * 2) * 180,
+                y: existing ? existing.y : cy + Math.sin(i / devices.length * Math.PI * 2) * 130
+            };
+        });
+
+        edges = buildEdges(nodes);
+        if(!nodes.some(n => n.x !== cx)) autoLayout();
+
+    }catch(e){ console.error(e); }
+}
+
+// Init
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+loadTopology().then(() => { autoLayout(); });
+setInterval(loadTopology, 10000);
+</script>
+</body>
+</html>

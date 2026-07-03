@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetVision — Traffic</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>
+if(localStorage.getItem("loggedIn") !== "true"){
+    window.location.href = "index.html";
+}
+</script>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="ti ti-broadcast"></i>
+        <h2>NetVision</h2>
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+            <i class="ti ti-layout-sidebar-left-collapse" id="toggleIcon"></i>
+        </button>
+    </div>
+    <ul>
+        <li onclick="window.location.href='dashboard.html'"><i class="ti ti-chart-bar"></i><span> Dashboard</span></li>
+        <li onclick="window.location.href='devices.html'"><i class="ti ti-server-2"></i><span> Devices</span></li>
+        <li class="active"><i class="ti ti-activity"></i><span> Traffic</span></li>
+        <li onclick="window.location.href='alerts.html'"><i class="ti ti-bell"></i><span> Alerts</span></li>
+        <li onclick="window.location.href='topology.html'"><i class="ti ti-topology-star"></i><span> Topology</span></li>
+        <li class="logout" onclick="logout()"><i class="ti ti-logout"></i><span> Logout</span></li>
+    </ul>
+    <div class="system-status">
+        <span class="status-dot"></span> System operational
+    </div>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        <h2>Traffic</h2>
+        <div class="user-info">
+            <span id="clock"></span>
+            <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme" style="font-size:18px"><i class="ti ti-sun" id="themeIcon"></i></button>
+            <div class="user-chip" onclick="window.location.href='profile.html'">
+                <span class="avatar">V</span>
+                Vicky
+            </div>
+        </div>
+    </div>
+
+    <h1>Network traffic</h1>
+
+    <div class="cards">
+        <div class="card">
+            <div class="card-icon total"><i class="ti ti-arrow-down"></i></div>
+            <p class="card-label">Inbound</p>
+            <p class="card-value" id="inboundVal">-- Mbps</p>
+        </div>
+        <div class="card">
+            <div class="card-icon online"><i class="ti ti-arrow-up"></i></div>
+            <p class="card-label">Outbound</p>
+            <p class="card-value" id="outboundVal">-- Mbps</p>
+        </div>
+        <div class="card">
+            <div class="card-icon ping"><i class="ti ti-chart-line"></i></div>
+            <p class="card-label">Peak today</p>
+            <p class="card-value" id="peakVal">-- Mbps</p>
+        </div>
+        <div class="card">
+            <div class="card-icon offline"><i class="ti ti-clock"></i></div>
+            <p class="card-label">Uptime</p>
+            <p class="card-value" id="uptimeVal">99.9%</p>
+        </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px">
+        <h2 style="margin:0"><i class="ti ti-chart-line"></i> Live traffic <span class="live-badge"><span></span>LIVE</span></h2>
+        <div style="display:flex;gap:8px">
+            <button class="btn-secondary" id="btnPause" onclick="togglePause()"><i class="ti ti-player-pause"></i> Pause</button>
+        </div>
+    </div>
+
+    <div class="chart-container" style="height:320px">
+        <canvas id="trafficChart"></canvas>
+    </div>
+
+    <h2 style="margin-top:28px"><i class="ti ti-chart-bar"></i> Traffic by hour</h2>
+    <div class="chart-container" style="height:240px;margin-top:0">
+        <canvas id="barChart"></canvas>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="app-traffic.js"></script>
+<script>
+function toggleSidebar(){
+    const sidebar = document.querySelector('.sidebar');
+    const icon = document.getElementById('toggleIcon');
+    sidebar.classList.toggle('collapsed');
+    icon.className = sidebar.classList.contains('collapsed')
+        ? 'ti ti-layout-sidebar-left-expand'
+        : 'ti ti-layout-sidebar-left-collapse';
+}
+function logout(){
+    localStorage.removeItem("loggedIn");
+    localStorage.removeItem("token");
+    window.location.href = "index.html";
+}
+function updateClock(){
+    document.getElementById("clock").innerText = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+</script>
+<script>
+function toggleTheme(){
+    const isLight = document.body.classList.toggle("light");
+    localStorage.setItem("theme", isLight ? "light" : "dark");
+    document.getElementById("themeIcon").className = isLight ? "ti ti-moon" : "ti ti-sun";
+}
+const savedTheme = localStorage.getItem("theme");
+if(savedTheme === "light"){
+    document.body.classList.add("light");
+    document.getElementById("themeIcon").className = "ti ti-moon";
+}
+</script>
+</body>
+</html>

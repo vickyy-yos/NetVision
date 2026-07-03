@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetVision — Profile</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>
+if(localStorage.getItem("loggedIn") !== "true"){
+    window.location.href = "index.html";
+}
+</script>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="ti ti-broadcast"></i>
+        <h2>NetVision</h2>
+    </div>
+    <ul>
+        <li onclick="window.location.href='dashboard.html'"><i class="ti ti-chart-bar"></i> Dashboard</li>
+        <li><i class="ti ti-server-2"></i> Devices</li>
+        <li><i class="ti ti-activity"></i> Traffic</li>
+        <li><i class="ti ti-bell"></i> Alerts</li>
+        <li onclick="logout()"><i class="ti ti-logout"></i> Logout</li>
+    </ul>
+    <div class="system-status">
+        <span class="status-dot"></span> System operational
+    </div>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        <h2>Profile</h2>
+        <div class="user-info">
+            <span id="clock"></span>
+            <div class="user-chip">
+                <span class="avatar" id="avatarInitial">V</span>
+                <span id="topbarUsername">Vicky</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-wrap">
+
+        <!-- Info card -->
+        <div class="profile-card">
+            <div class="profile-avatar" id="profileAvatar">V</div>
+            <div class="profile-info">
+                <h2 id="profileUsername">-</h2>
+                <p id="profileJoined" style="color:#94a3b8;font-size:14px;margin:4px 0 0"></p>
+            </div>
+        </div>
+
+        <!-- Change password card -->
+        <div class="health-card" style="margin-top:24px">
+            <h3 style="margin-top:0"><i class="ti ti-lock"></i> Change password</h3>
+
+            <div id="profileMsg" style="display:none;padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px"></div>
+
+            <label class="form-label">Current password</label>
+            <input type="password" id="currentPassword" placeholder="Enter current password" class="profile-input">
+
+            <label class="form-label">New password</label>
+            <input type="password" id="newPassword" placeholder="Enter new password" class="profile-input">
+
+            <label class="form-label">Confirm new password</label>
+            <input type="password" id="confirmPassword" placeholder="Confirm new password" class="profile-input">
+
+            <button class="btn-primary" style="margin-top:20px;width:100%;justify-content:center" onclick="changePassword()">
+                <i class="ti ti-check"></i> Save changes
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:3000/api";
+
+function getToken(){
+    return localStorage.getItem("token");
+}
+
+function authHeaders(){
+    return {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + getToken()
+    };
+}
+
+function logout(){
+    localStorage.removeItem("loggedIn");
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    window.location.href = "index.html";
+}
+
+function updateClock(){
+    document.getElementById("clock").innerText = new Date().toLocaleTimeString();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+async function loadProfile(){
+    try{
+        const response = await fetch(`${API_BASE}/profile`, {
+            headers: authHeaders()
+        });
+
+        if(response.status === 401 || response.status === 403){
+            logout();
+            return;
+        }
+
+        const user = await response.json();
+
+        const initial = user.username.charAt(0).toUpperCase();
+        document.getElementById("profileAvatar").textContent = initial;
+        document.getElementById("avatarInitial").textContent = initial;
+        document.getElementById("profileUsername").textContent = user.username;
+        document.getElementById("topbarUsername").textContent = user.username;
+        document.getElementById("profileJoined").textContent =
+            "Joined " + new Date(user.created_at).toLocaleDateString("id-ID", {
+                day: "numeric", month: "long", year: "numeric"
+            });
+
+    }catch(err){
+        console.error(err);
+    }
+}
+
+loadProfile();
+
+function showMsg(text, isSuccess){
+    const el = document.getElementById("profileMsg");
+    el.style.display = "block";
+    el.textContent = text;
+    el.style.background = isSuccess ? "var(--bg-success, #16311d)" : "#3b1f25";
+    el.style.color = isSuccess ? "#4ade80" : "#ff6b81";
+    el.style.border = isSuccess ? "1px solid #22c55e33" : "1px solid #ff4d6d33";
+}
+
+async function changePassword(){
+    const currentPassword = document.getElementById("currentPassword").value;
+    const newPassword = document.getElementById("newPassword").value;
+    const confirmPassword = document.getElementById("confirmPassword").value;
+
+    if(!currentPassword || !newPassword || !confirmPassword){
+        showMsg("Semua field wajib diisi", false);
+        return;
+    }
+
+    if(newPassword.length < 6){
+        showMsg("Password baru minimal 6 karakter", false);
+        return;
+    }
+
+    if(newPassword !== confirmPassword){
+        showMsg("Konfirmasi password tidak cocok", false);
+        return;
+    }
+
+    try{
+        const response = await fetch(`${API_BASE}/profile`, {
+            method: "PUT",
+            headers: authHeaders(),
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        const data = await response.json();
+
+        if(response.ok){
+            showMsg("Password berhasil diubah!", true);
+            document.getElementById("currentPassword").value = "";
+            document.getElementById("newPassword").value = "";
+            document.getElementById("confirmPassword").value = "";
+        }else{
+            showMsg(data.message || "Gagal mengubah password", false);
+        }
+
+    }catch(err){
+        console.error(err);
+        showMsg("Tidak bisa terhubung ke server", false);
+    }
+}
+</script>
+
+<script>
+function toggleTheme(){
+    const isLight = document.body.classList.toggle("light");
+    localStorage.setItem("theme", isLight ? "light" : "dark");
+    document.getElementById("themeIcon").className = isLight ? "ti ti-moon" : "ti ti-sun";
+}
+const savedTheme = localStorage.getItem("theme");
+if(savedTheme === "light"){
+    document.body.classList.add("light");
+    document.getElementById("themeIcon").className = "ti ti-moon";
+}
+</script>
+</body>
+</html>
