@@ -1,3 +1,4 @@
-echo node_modules/ > .gitignore
-echo .env >> .gitignore
-echo *.php >> .gitignore
+node_modules/
+.env
+*.php
+.vscode/
