@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetVision — Uptime</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .uptime-bar-wrap {
+            background: var(--bg-input);
+            border-radius: 99px;
+            height: 8px;
+            overflow: hidden;
+            flex: 1;
+        }
+        .uptime-bar-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width .6s ease;
+        }
+        .uptime-badge {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 99px;
+            min-width: 56px;
+            text-align: center;
+        }
+        .uptime-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 12px;
+            transition: border-color var(--transition);
+        }
+        .uptime-card:hover { border-color: var(--border-strong); }
+        .uptime-device-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .uptime-device-info { display: flex; align-items: center; gap: 12px; }
+        .uptime-device-icon {
+            width: 36px; height: 36px;
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+        }
+        .uptime-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .uptime-row-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            width: 40px;
+            flex-shrink: 0;
+        }
+        .uptime-pct {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            width: 44px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .no-data {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<script>
+if(localStorage.getItem("loggedIn") !== "true"){
+    window.location.href = "index.html";
+}
+</script>
+
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="ti ti-broadcast"></i>
+        <h2>NetVision</h2>
+        <button class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+            <i class="ti ti-layout-sidebar-left-collapse" id="toggleIcon"></i>
+        </button>
+    </div>
+    <ul>
+        <li onclick="window.location.href='dashboard.html'"><i class="ti ti-chart-bar"></i><span> Dashboard</span></li>
+        <li onclick="window.location.href='devices.html'"><i class="ti ti-server-2"></i><span> Devices</span></li>
+        <li onclick="window.location.href='traffic.html'"><i class="ti ti-activity"></i><span> Traffic</span></li>
+        <li onclick="window.location.href='alerts.html'"><i class="ti ti-bell"></i><span> Alerts</span></li>
+        <li onclick="window.location.href='topology.html'"><i class="ti ti-topology-star"></i><span> Topology</span></li>
+        <li class="active"><i class="ti ti-chart-line"></i><span> Uptime</span></li>
+        <li class="logout" onclick="logout()"><i class="ti ti-logout"></i><span> Logout</span></li>
+    </ul>
+    <div class="system-status">
+        <span class="status-dot"></span> System operational
+    </div>
+</div>
+
+<div class="main">
+    <div class="topbar">
+        <h2>Uptime</h2>
+        <div class="user-info">
+            <span id="clock"></span>
+            <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Toggle theme" style="font-size:18px">
+                <i class="ti ti-sun" id="themeIcon"></i>
+            </button>
+            <div class="user-chip" onclick="window.location.href='profile.html'">
+                <span class="avatar">V</span>
+                Vicky
+            </div>
+        </div>
+    </div>
+
+    <h1>Uptime tracker</h1>
+
+    <div class="cards" style="margin-bottom:24px">
+        <div class="card">
+            <div class="card-icon online"><i class="ti ti-circle-check"></i></div>
+            <p class="card-label">Avg uptime 24h</p>
+            <p class="card-value" id="avgUptime24">--%</p>
+        </div>
+        <div class="card">
+            <div class="card-icon total"><i class="ti ti-calendar-week"></i></div>
+            <p class="card-label">Avg uptime 7d</p>
+            <p class="card-value" id="avgUptime7d">--%</p>
+        </div>
+        <div class="card">
+            <div class="card-icon ping"><i class="ti ti-radar"></i></div>
+            <p class="card-label">Total checks</p>
+            <p class="card-value" id="totalChecks">--</p>
+        </div>
+        <div class="card">
+            <div class="card-icon offline"><i class="ti ti-server-2"></i></div>
+            <p class="card-label">Devices tracked</p>
+            <p class="card-value" id="devicesTracked">--</p>
+        </div>
+    </div>
+
+    <div class="section-header">
+        <h2><i class="ti ti-chart-line"></i> Per device uptime</h2>
+        <button class="btn-secondary" onclick="loadUptime()"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+
+    <div id="uptimeList"></div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:3000/api";
+function getToken(){ return localStorage.getItem("token"); }
+function authHeaders(){ return { "Content-Type":"application/json","Authorization":"Bearer "+getToken() }; }
+function logout(){ localStorage.removeItem("loggedIn"); localStorage.removeItem("token"); window.location.href="index.html"; }
+function toggleSidebar(){
+    const s=document.querySelector('.sidebar'),i=document.getElementById('toggleIcon');
+    s.classList.toggle('collapsed');
+    i.className=s.classList.contains('collapsed')?'ti ti-layout-sidebar-left-expand':'ti ti-layout-sidebar-left-collapse';
+}
+function toggleTheme(){
+    const isLight=document.body.classList.toggle("light");
+    localStorage.setItem("theme",isLight?"light":"dark");
+    document.getElementById("themeIcon").className=isLight?"ti ti-moon":"ti ti-sun";
+}
+const savedTheme=localStorage.getItem("theme");
+if(savedTheme==="light"){ document.body.classList.add("light"); document.getElementById("themeIcon").className="ti ti-moon"; }
+function updateClock(){ document.getElementById("clock").innerText=new Date().toLocaleTimeString(); }
+setInterval(updateClock,1000); updateClock();
+
+function getUptimeColor(pct){
+    if(pct === null) return { bar:"#4a607a", badge:"rgba(74,96,122,0.15)", text:"#4a607a" };
+    const n = parseFloat(pct);
+    if(n >= 99) return { bar:"#22c55e", badge:"rgba(34,197,94,0.1)", text:"#22c55e" };
+    if(n >= 95) return { bar:"#3b82f6", badge:"rgba(59,130,246,0.1)", text:"#3b82f6" };
+    if(n >= 80) return { bar:"#f59e0b", badge:"rgba(245,158,11,0.1)", text:"#f59e0b" };
+    return { bar:"#ef4444", badge:"rgba(239,68,68,0.1)", text:"#ef4444" };
+}
+
+function getDeviceIcon(name){
+    const n = name.toLowerCase();
+    if(n.includes("router")) return { icon:"ti-router", bg:"rgba(59,130,246,0.1)", color:"var(--accent)" };
+    if(n.includes("switch")) return { icon:"ti-switch-horizontal", bg:"rgba(139,92,246,0.1)", color:"#8b5cf6" };
+    if(n.includes("server")) return { icon:"ti-server-2", bg:"rgba(245,158,11,0.1)", color:"var(--yellow)" };
+    if(n.includes("ap") || n.includes("wifi")) return { icon:"ti-wifi", bg:"rgba(34,197,94,0.1)", color:"var(--green)" };
+    return { icon:"ti-device-desktop", bg:"rgba(99,102,241,0.1)", color:"#6366f1" };
+}
+
+async function loadUptime(){
+    const list = document.getElementById("uptimeList");
+    list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)"><i class="ti ti-loader" style="font-size:24px"></i><br>Loading...</div>`;
+
+    try{
+        const r = await fetch(`${API_BASE}/uptime`, { headers: authHeaders() });
+        if(r.status === 401 || r.status === 403){ logout(); return; }
+        const devices = await r.json();
+
+        list.innerHTML = "";
+
+        if(devices.length === 0){
+            list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">No devices found</div>`;
+            return;
+        }
+
+        // Summary cards
+        const tracked = devices.filter(d => d.checks_24h > 0);
+        const avg24 = tracked.length > 0
+            ? (tracked.reduce((s,d) => s + parseFloat(d.uptime_24h || 0), 0) / tracked.length).toFixed(1)
+            : null;
+        const avg7d = tracked.length > 0
+            ? (tracked.reduce((s,d) => s + parseFloat(d.uptime_7d || 0), 0) / tracked.length).toFixed(1)
+            : null;
+        const totalChecks = devices.reduce((s,d) => s + (d.checks_7d || 0), 0);
+
+        document.getElementById("avgUptime24").innerText = avg24 ? avg24 + "%" : "--";
+        document.getElementById("avgUptime7d").innerText = avg7d ? avg7d + "%" : "--";
+        document.getElementById("totalChecks").innerText = totalChecks.toLocaleString();
+        document.getElementById("devicesTracked").innerText = devices.length;
+
+        // Device cards
+        devices.forEach(device => {
+            const di = getDeviceIcon(device.name);
+            const c24 = getUptimeColor(device.uptime_24h);
+            const c7d = getUptimeColor(device.uptime_7d);
+
+            const card = document.createElement("div");
+            card.className = "uptime-card";
+            card.innerHTML = `
+                <div class="uptime-device-header">
+                    <div class="uptime-device-info">
+                        <div class="uptime-device-icon" style="background:${di.bg};color:${di.color}">
+                            <i class="ti ${di.icon}"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px">${device.name}</div>
+                            <div style="font-size:12px;color:var(--text-muted)">${device.ip_address}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span style="font-size:11px;color:var(--text-muted)">${device.checks_24h || 0} checks today</span>
+                        <span style="
+                            font-size:11px;font-weight:600;
+                            padding:3px 10px;border-radius:99px;
+                            background:${device.status==='Online'?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};
+                            color:${device.status==='Online'?'var(--green)':'var(--red)'}
+                        ">● ${device.status}</span>
+                    </div>
+                </div>
+
+                ${device.uptime_24h !== null ? `
+                <div class="uptime-row">
+                    <span class="uptime-row-label">24h</span>
+                    <div class="uptime-bar-wrap">
+                        <div class="uptime-bar-fill" style="width:${device.uptime_24h}%;background:${c24.bar}"></div>
+                    </div>
+                    <span class="uptime-pct" style="color:${c24.text}">${device.uptime_24h}%</span>
+                </div>` : `<div class="uptime-row"><span class="uptime-row-label">24h</span><span class="no-data">No data yet — waiting for checks</span></div>`}
+
+                ${device.uptime_7d !== null ? `
+                <div class="uptime-row">
+                    <span class="uptime-row-label">7d</span>
+                    <div class="uptime-bar-wrap">
+                        <div class="uptime-bar-fill" style="width:${device.uptime_7d}%;background:${c7d.bar}"></div>
+                    </div>
+                    <span class="uptime-pct" style="color:${c7d.text}">${device.uptime_7d}%</span>
+                </div>` : `<div class="uptime-row"><span class="uptime-row-label">7d</span><span class="no-data">No data yet</span></div>`}
+            `;
+            list.appendChild(card);
+        });
+
+    }catch(e){
+        console.error(e);
+        list.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">Tidak bisa terhubung ke server</div>`;
+    }
+}
+
+loadUptime();
+setInterval(loadUptime, 60000);
+</script>
+</body>
+</html>

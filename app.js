@@ -707,3 +707,5 @@ function startRadar(){
 
     draw();
 }
+
+getComputedStyle(document.body).fontFamily

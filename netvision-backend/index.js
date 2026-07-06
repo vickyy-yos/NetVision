@@ -187,15 +187,74 @@ async function pingAllDevices(){
             try{
                 const result = await checkDevice(device.ip_address);
                 const newStatus = result.alive ? 'Online' : 'Offline';
+
+                // Update status kalau berubah
                 if(newStatus !== device.status){
                     await db.query('UPDATE devices SET status = ? WHERE id = ?', [newStatus, device.id]);
                     console.log(`[MONITOR] ${device.name} (${device.ip_address}): ${device.status} → ${newStatus}${result.port ? ' port:'+result.port : ''}`);
                 }
+
+                // Catat ke uptime_log
+                await db.query('INSERT INTO uptime_log (device_id, status) VALUES (?, ?)', [device.id, newStatus]);
+
+                // Hapus log lebih dari 7 hari
+                await db.query('DELETE FROM uptime_log WHERE device_id = ? AND checked_at < DATE_SUB(NOW(), INTERVAL 7 DAY)', [device.id]);
+
             }catch(e){ console.error(`[MONITOR ERROR] ${device.name}:`, e.message); }
         }
         console.log(`[MONITOR] Check selesai — ${new Date().toLocaleTimeString()}`);
     }catch(e){ console.error('[MONITOR ALL ERROR]:', e.message); }
 }
+
+// Endpoint uptime stats
+app.get('/api/uptime', verifyToken, async (req, res) => {
+    try{
+        const [devices] = await db.query('SELECT id, name, ip_address, status FROM devices');
+
+        const stats = await Promise.all(devices.map(async (device) => {
+            // Uptime 24 jam
+            const [rows24] = await db.query(`
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'Online' THEN 1 ELSE 0 END) as online_count
+                FROM uptime_log
+                WHERE device_id = ?
+                AND checked_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            `, [device.id]);
+
+            // Uptime 7 hari
+            const [rows7d] = await db.query(`
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'Online' THEN 1 ELSE 0 END) as online_count
+                FROM uptime_log
+                WHERE device_id = ?
+                AND checked_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            `, [device.id]);
+
+            const uptime24 = rows24[0].total > 0
+                ? ((rows24[0].online_count / rows24[0].total) * 100).toFixed(1)
+                : null;
+
+            const uptime7d = rows7d[0].total > 0
+                ? ((rows7d[0].online_count / rows7d[0].total) * 100).toFixed(1)
+                : null;
+
+            return {
+                ...device,
+                uptime_24h: uptime24,
+                uptime_7d: uptime7d,
+                checks_24h: rows24[0].total,
+                checks_7d: rows7d[0].total
+            };
+        }));
+
+        res.json(stats);
+    }catch(e){
+        console.error(e);
+        res.status(500).json({ message: 'Terjadi kesalahan server' });
+    }
+});
 
 pingAllDevices();
 setInterval(pingAllDevices, 30000);
